@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" verison="1.2" baseProfile="tiny" viewBox="0 0 96 96">
+  <g transform="translate(48 48)">
+    <rect x="-32" y="-32" width="64" height="64" fill="white"/>
+    <g transform="rotate(45)">
+      <rect x="-32" y="-32" width="64" height="64" fill="white"/>
+    </g>
+    <circle cx="0" cy="0" r="24" fill="black"/>
+  </g>
+</svg>

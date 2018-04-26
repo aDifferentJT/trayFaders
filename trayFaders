@@ -1,0 +1,110 @@
+#!/usr/bin/python3
+
+import sys
+import alsaaudio
+import select
+import threading
+import subprocess
+from PyQt5 import QtGui, QtWidgets
+
+class FaderAction(QtWidgets.QWidgetAction):
+    def __init__(self, changedCallback, pressedCallback, releasedCallback, minVal, maxVal, parent):
+        QtWidgets.QWidgetAction.__init__(self, parent)
+        self._slider = QtWidgets.QSlider(parent)
+        self._slider.setRange(minVal, maxVal)
+        self._slider.valueChanged.connect(changedCallback)
+        if pressedCallback != None:
+          self._slider.sliderPressed.connect(pressedCallback)
+        if releasedCallback != None:
+          self._slider.sliderReleased.connect(releasedCallback)
+        self.setDefaultWidget(self._slider)
+
+    def setValue(self, value):
+        self._slider.setValue(value)
+
+class TrayFader(QtWidgets.QSystemTrayIcon):
+    def __init__(self, changedCallback, pressedCallback, releasedCallback, minVal, maxVal, icon, parent):
+        QtWidgets.QSystemTrayIcon.__init__(self, icon, parent)
+        self._menu = QtWidgets.QMenu(parent)
+        self._faderAction = FaderAction(changedCallback, pressedCallback, releasedCallback, minVal, maxVal, parent)
+        self._menu.addAction(self._faderAction)
+        self.setContextMenu(self._menu)
+
+class VolumeFader(TrayFader):
+    def __init__(self, parent):
+        TrayFader.__init__(self, self._setVolume, self._stopPolling, self._startPolling, 0, 100, QtGui.QIcon(), parent)
+        self._mixer = alsaaudio.Mixer()
+        self._volume = self._getVolume()
+        self._updateIcon()
+        self._startPolling()
+
+    def _getVolume(self):
+        return (lambda l: sum(l)//len(l))(self._mixer.getvolume())
+
+    def _setVolume(self, value):
+        if self._volume != value:
+            self._mixer.setvolume(value)
+            self._volume = value
+            self._updateIcon()
+
+    def _updateVolume(self):
+        self._volume = self._getVolume()
+        self._faderAction.setValue(self._volume)
+        self._updateIcon()
+
+    def _updateIcon(self):
+        if self._volume == 0:
+            self.setIcon(QtGui.QIcon("icons/volume/mute.svg"))
+        elif 0 < self._volume < 50:
+            self.setIcon(QtGui.QIcon("icons/volume/1_bars.svg"))
+        elif 50 <= self._volume < 100:
+            self.setIcon(QtGui.QIcon("icons/volume/2_bars.svg"))
+        elif self._volume == 100:
+            self.setIcon(QtGui.QIcon("icons/volume/3_bars.svg"))
+        else:
+            raise Exception
+
+    def _pollVolume(self):
+        poll = select.poll()
+        poll.register(*self._mixer.polldescriptors()[0])
+        while self._isPolling:
+            poll.poll()
+            self._updateVolume()
+            self._mixer.handleevents()
+
+    def _startPolling(self):
+        self._thread = threading.Thread(target = self._pollVolume)
+        self._isPolling = True
+        self._thread.start()
+
+    def _stopPolling(self):
+        self._isPolling = False
+
+class BrightnessFader(TrayFader):
+    def __init__(self, parent):
+        TrayFader.__init__(self, self._setBrightness, None, None, 1, 100, QtGui.QIcon("icons/brightness/brightness.svg"), parent)
+        self.activated.connect(self._updateBrightness)
+        
+    def _getBrightness(self):
+        return float(subprocess.run(["xbacklight"], stdout = subprocess.PIPE).stdout)
+
+    def _setBrightness(self, value):
+        subprocess.run(["xbacklight","-set",str(value)])
+
+    def _updateBrightness(self):
+        self._faderAction.setValue(self._getBrightness())
+
+def main():
+    app = QtWidgets.QApplication(sys.argv)
+
+    parent = QtWidgets.QWidget()
+    volumeIcon = VolumeFader(parent)
+    brightnessIcon = BrightnessFader(parent)
+
+    volumeIcon.show()
+    brightnessIcon.show()
+    app.exec()
+
+if __name__ == "__main__":
+    main()
+
