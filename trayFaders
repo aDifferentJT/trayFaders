@@ -5,6 +5,7 @@ import alsaaudio
 import select
 import threading
 import subprocess
+import os
 from PyQt5 import QtGui, QtWidgets
 
 class FaderAction(QtWidgets.QWidgetAction):
@@ -82,19 +83,22 @@ class VolumeFader(TrayFader):
 
 class BrightnessFader(TrayFader):
     def __init__(self, parent):
-        TrayFader.__init__(self, self._setBrightness, None, None, 1, 100, QtGui.QIcon("icons/brightness/brightness.svg"), parent)
+        TrayFader.__init__(self, self._setBrightness, None, None, 1, 937, QtGui.QIcon("icons/brightness/brightness.svg"), parent)
         self.activated.connect(self._updateBrightness)
         
     def _getBrightness(self):
-        return float(subprocess.run(["xbacklight"], stdout = subprocess.PIPE).stdout)
+        brightnessFile = open("/sys/class/backlight/intel_backlight/brightness")
+        return float(brightnessFile.read())
 
     def _setBrightness(self, value):
-        subprocess.run(["xbacklight","-set",str(value)])
+        subprocess.run(["setBrightness",str(value)])
 
     def _updateBrightness(self):
         self._faderAction.setValue(self._getBrightness())
 
 def main():
+    os.chdir("/opt/trayFaders")
+
     app = QtWidgets.QApplication(sys.argv)
 
     parent = QtWidgets.QWidget()
